@@ -22,9 +22,9 @@ Role role;
 typedef struct {
 	char leftJoyX, leftJoyY; //-127 - -1 | 0 | 1 - 128
 	char rightJoyX, rightJoyY;
-	uint8_t leftTrigger, rightTriger;
+	uint8_t leftTrigger, rightTrigger;
 
-	bool leftButton, rightButton;
+	bool leftBumper, rightBumper;
 	bool A, B, X, Y;
 	
 	bool back, start;
@@ -45,9 +45,9 @@ FeedbackPackage feedbackPackage;
 struct Xbox360PadState {
 	int leftJoyX, leftJoyY;
 	int rightJoyX, rightJoyY;
-	int leftTrigger, rightTriger;
+	int leftTrigger, rightTrigger;
 
-	bool leftButton, rightButton;
+	bool leftBumper, rightBumper;
 	bool A, B, X, Y;
 
 	bool back, start;
@@ -123,7 +123,7 @@ void loop() {
 		if (XboxRCV.XboxReceiverConnected) {
 			if (XboxRCV.Xbox360Connected[0]) {  //pad id (4 possible pads connected simultonauesly)
 				pad.leftTrigger = XboxRCV.getButtonPress(L2, 0); //0-255
-				pad.rightTriger = XboxRCV.getButtonPress(R2, 0);
+				pad.rightTrigger = XboxRCV.getButtonPress(R2, 0);
 
 				pad.leftJoyX = XboxRCV.getAnalogHat(LeftHatX, 0);
 				pad.rightJoyX = XboxRCV.getAnalogHat(RightHatX, 0);
@@ -135,8 +135,8 @@ void loop() {
 				pad.X = XboxRCV.getButtonPress(X, 0);
 				pad.Y = XboxRCV.getButtonPress(Y, 0);
 
-				pad.rightButton = XboxRCV.getButtonPress(R1, 0);
-				pad.leftButton = XboxRCV.getButtonPress(L1, 0);
+				pad.rightBumper = XboxRCV.getButtonPress(R1, 0);
+				pad.leftBumper = XboxRCV.getButtonPress(L1, 0);
 
 				pad.dPadLeft = XboxRCV.getButtonPress(LEFT, 0);
 				pad.dPadRight = XboxRCV.getButtonPress(RIGHT, 0);
@@ -186,7 +186,7 @@ void loop() {
 		else controllerPackage.rightJoyY = 0;
 
 		controllerPackage.leftTrigger = pad.leftTrigger;
-		controllerPackage.rightTriger = pad.rightTriger;
+		controllerPackage.rightTrigger = pad.rightTrigger;
 		controllerPackage.A = pad.A;
 		controllerPackage.B = pad.B;
 		controllerPackage.X = pad.X;
@@ -194,8 +194,8 @@ void loop() {
 		controllerPackage.back = pad.back;
 		controllerPackage.start = pad.start;
 
-		controllerPackage.rightButton = pad.rightButton;
-		controllerPackage.leftButton = pad.leftButton;
+		controllerPackage.rightBumper = pad.rightBumper;
+		controllerPackage.leftBumper = pad.leftBumper;
 		controllerPackage.leftJoyButton = pad.leftJoyButton;
 		controllerPackage.rightJoyButton = pad.rightJoyButton;
 

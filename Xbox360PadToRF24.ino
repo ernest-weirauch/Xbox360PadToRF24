@@ -188,7 +188,7 @@ void loop() {
 		else controllerPackage.rightJoyY = 0;
 
 		//DOPISZ BRAKUJ¥CE
-
+		asdasd
 
 
 
@@ -217,15 +217,10 @@ void loop() {
 			successed++;
 		}
 
-		if (failed + successed >= COUNT) {
-			int _ratio = 100 * failed / (failed + successed);
-			// Serial.print("Time ");
-			_startTime = (millis() - _startTime);
-
-			successed = 0;
-			failed = 0;
-			_startTime = millis();
-		}
+		//count failed to succeded ratio
+		int ratio = 100 * failed / (failed + successed);
+		
+		
 
 
 	} else { //roleReceiver

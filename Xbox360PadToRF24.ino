@@ -171,9 +171,7 @@ void loop() {
 				lastPadState = pad;
 			}
 		}
-
-
-
+			   
 		//convert pad readings to radio package - include deadzone fix
 		if (pad.leftJoyX != 0) controllerPackage.leftJoyX = map(pad.leftJoyX, JOY_MIN, JOY_MAX, -127, 128);
 		else controllerPackage.leftJoyX = 0;
@@ -187,8 +185,26 @@ void loop() {
 		if (pad.rightJoyY != 0) controllerPackage.rightJoyY = map(pad.rightJoyY, JOY_MIN, JOY_MAX, -127, 128);
 		else controllerPackage.rightJoyY = 0;
 
-		//DOPISZ BRAKUJ¥CE
-		asdasd
+		controllerPackage.leftTrigger = pad.leftTrigger;
+		controllerPackage.rightTriger = pad.rightTriger;
+		controllerPackage.A = pad.A;
+		controllerPackage.B = pad.B;
+		controllerPackage.X = pad.X;
+		controllerPackage.Y = pad.Y;
+		controllerPackage.back = pad.back;
+		controllerPackage.start = pad.start;
+
+		controllerPackage.rightButton = pad.rightButton;
+		controllerPackage.leftButton = pad.leftButton;
+		controllerPackage.leftJoyButton = pad.leftJoyButton;
+		controllerPackage.rightJoyButton = pad.rightJoyButton;
+
+		controllerPackage.dPadLeft = pad.dPadLeft;
+		controllerPackage.dPadRight = pad.dPadRight;
+		controllerPackage.dPadUp = pad.dPadUp;
+		controllerPackage.dPadDown = pad.dPadDown;
+		controllerPackage.guide = pad.guide;
+		
 
 
 

@@ -28,11 +28,11 @@ typedef struct {
 
 	bool leftBumper, rightBumper;
 	bool A, B, X, Y;
-	
+
 	bool back, start;
-	
+
 	bool leftJoyButton, rightJoyButton;
-	
+
 	bool dPadUp, dPadRight, dPadDown, dPadLeft;
 	bool guide;
 }ControlPackage;
@@ -65,6 +65,11 @@ struct Xbox360PadState {
 const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL };
 
 RF24 radio(PIN_CE, PIN_CSN);
+unsigned long loopStart = 0;
+unsigned long successed = 0;
+unsigned long failed = 0;
+int ratio = 0;
+
 
 USB Usb;
 XBOXRECV XboxRCV(&Usb);
@@ -87,16 +92,16 @@ void setup() {
 	display.setTextColor(SSD1306_WHITE); // Draw white text
 	display.setCursor(0, 0);     // Start at top-left corner
 	display.cp437(true);         // Use full 256 char 'Code Page 437' font
-	println("setup() begin");
+	display << "setup() begin" << endl; disp();
 
 	//Role setup
 	pinMode(PIN_ROLE, INPUT_PULLUP);
 	if (digitalRead(PIN_ROLE)) role = roleTransmitter;
 	else role = roleReceiver;
-	print("role: ");
-	if (role == roleTransmitter) println("transmitter");
-	else println("receiver");
 
+	display << "role: ";
+	if (role == roleTransmitter) { display << "transmitter" << endl; disp(); }
+	else display << "receiver" << endl; disp();
 
 	//Serial Ÿle wp³ywa na pracê NRF24L01?
 	//Serial powoduje jitter PWM (serwa)
@@ -110,6 +115,7 @@ void setup() {
 
 		if (Usb.Init() == -1) {
 			digitalWrite(13, HIGH);
+			display << "Usb.Init error" << endl << "Halted!" << endl; disp();
 			while (1); //halt
 		}
 
@@ -130,18 +136,15 @@ void setup() {
 	radio.powerUp();
 	radio.startListening();
 
+
+
 	pinMode(LED_BUILTIN, OUTPUT);
 	blink(LED_BUILTIN, 3, 500);
-	println("setup() end");
+	display << "setup() end" << endl; disp();
 }
 
 
 void loop() {
-	static unsigned long loopStart = 0;
-	static unsigned int successed = 0;
-	static unsigned int failed = 0;
-	static int ratio = 0;
-
 	//nadajnik
 	if (role = roleTransmitter) {
 		//USB
@@ -177,7 +180,7 @@ void loop() {
 
 				pad.guide = XboxRCV.getButtonPress(XBOX, 0);
 
-				
+
 				//deadzone fixes
 				if (pad.leftJoyX <= JOY_MIN) pad.leftJoyX = -32767; // tu by wystarczylo == ale na wypadek zmiany typow na wieksze
 				if (pad.leftJoyY <= JOY_MIN) pad.leftJoyY = -32767;
@@ -197,7 +200,7 @@ void loop() {
 				lastPadState = pad;
 			}
 		}
-			   
+
 		//convert pad readings to radio package - include deadzone fix
 		if (pad.leftJoyX != 0) controllerPackage.leftJoyX = map(pad.leftJoyX, JOY_MIN, JOY_MAX, -127, 128);
 		else controllerPackage.leftJoyX = 0;
@@ -230,7 +233,6 @@ void loop() {
 		controllerPackage.dPadUp = pad.dPadUp;
 		controllerPackage.dPadDown = pad.dPadDown;
 		controllerPackage.guide = pad.guide;
-		
 
 
 
@@ -240,30 +242,29 @@ void loop() {
 		// First, stop listening so we can talk.
 		radio.stopListening();
 		if (!radio.write(&controllerPackage, sizeof(controllerPackage))) {
-			println("radio.write error");
+			display << "radio.write error" << endl; disp(); disp();
 		}
 		radio.startListening();
-		//println("delivery success: ");
-		//print("t: ");
-		//print((millis() - loopStart));
-		
+		display << "delivery success, t: " << millis() - loopStart << endl; disp();
+
+
 		//FUJ
 		while (!radio.available() && (millis() - loopStart) < 10) {} //zawiesza wykonanie na 10s!!!
 
 		if (millis() - loopStart >= 200) {
-			// printf("Failed. Timeout: %i...", millis() - loop_start);
 			failed++;
+			display << "failed, timeout: " << millis() - loopStart << endl; disp();
 		} else {
 			//feedback receive
 			radio.read(&feedbackPackage, sizeof(feedbackPackage));
-			// Serial.print("Got response ");
+			display << "got response" << endl; disp();
 			successed++;
 		}
 
 		//count failed to succeded ratio
 		int ratio = 100 * failed / (failed + successed);
-		
-		
+
+
 
 
 	} else { //roleReceiver
@@ -276,12 +277,13 @@ void loop() {
 			// the reply while we wait on serial i/o.
 			radio.stopListening();
 			radio.write(&feedbackPackage, sizeof(feedbackPackage));
-			// Serial.print("Sent response ");
+			display << "sent response" << endl; disp();
+
 
 			// Now, resume listening so we catch the next packets.
 			radio.startListening();
-			
-			
+
+
 
 
 
@@ -292,8 +294,7 @@ void loop() {
 
 		}
 
-		print("s/f/r: ");
-		println(successed+"/"+failed+ratio);
+		display << "s/f/r: " << successed << "/" << failed << "/" << ratio << endl;
 		
 
 	}
@@ -305,32 +306,14 @@ void loop() {
 
 void blink(uint8_t pin, uint8_t n, unsigned int t) {
 	digitalWrite(pin, LOW);
-	for (uint8_t i = 0; i < 2*n; i++) {
+	for (uint8_t i = 0; i < 2 * n; i++) {
 		digitalWrite(pin, !digitalRead(pin));
 		delay(t);
 	}
 }
 
-void print(String str) {
-	if (line != 0 && line % 8 == 0) {
-		display.clearDisplay();
-		display.setCursor(0, 0);
-	}
-	display.print(str);
+void disp() {
 	display.display();
-	line++;
-	
 }
-
-void println(String str) {
-	if (line != 0 && line % 8 == 0) {
-		display.clearDisplay();
-		display.setCursor(0, 0);
-	}
-	display.println(str);
-	display.display();
-	line++;
-}
-
 
 

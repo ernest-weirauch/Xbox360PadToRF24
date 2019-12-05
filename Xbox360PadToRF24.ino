@@ -3,10 +3,12 @@
 #include <SPI.h>
 #include <RF24.h>
 #include <XBOXRECV.h>
-#include <Wire.h>				//OLED:
+#include <Wire.h>				//OLED 128x64 display:
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include "BistableSwitch.h"
 
+//used pins: SPI(), I2C() + 
 #define PIN_CE 8
 #define PIN_CSN 7
 #define PIN_ROLE 2
@@ -76,19 +78,19 @@ XBOXRECV XboxRCV(&Usb);
 
 Adafruit_SSD1306 display(128, 64, &Wire, 4);
 unsigned long line = 0;
-template<class T>  Print& operator <<(Print& obj, T arg) {	//print stream, dont forget do display.display(); after!!
+template<class T>  Print& operator <<(Print& obj, T arg) {	//print stream, dont forget do display.display(); after every use!!
 	obj.print(arg);
 	return obj;
 } //Operator <<
 #define endl "\n"
 
-
+BistableSwitch bistableSwitchLights;
 
 
 void setup() {
 	display.begin(SSD1306_SWITCHCAPVCC, 0x3C);	//OLED
 	display.clearDisplay();						//flush buffer (adafruit logo given from lib)
-	display.setTextSize(1);      // Normal 1:1 pixel scale
+	display.setTextSize(1);      // Normal 1:1 pixel scale - w tym trybie wyœwietla 8 wierszy po 21 znaków
 	display.setTextColor(SSD1306_WHITE); // Draw white text
 	display.setCursor(0, 0);     // Start at top-left corner
 	display.cp437(true);         // Use full 256 char 'Code Page 437' font
@@ -219,7 +221,10 @@ void loop() {
 		controllerPackage.A = pad.A;
 		controllerPackage.B = pad.B;
 		controllerPackage.X = pad.X;
-		controllerPackage.Y = pad.Y;
+		//controllerPackage.Y = pad.Y;
+		bistableSwitchLights.update(pad.Y);
+		controllerPackage.Y = bistableSwitchLights.getState(); //ciagle przesyla 1 jezeli swiatla wlaczone 
+
 		controllerPackage.back = pad.back;
 		controllerPackage.start = pad.start;
 
@@ -269,9 +274,12 @@ void loop() {
 
 	} else { //roleReceiver
 
+
 	   //  if there is data ready
 		if (radio.available()) {
 			radio.read(&controllerPackage, sizeof(controllerPackage));
+
+			//!!! prepare feedback package !!!
 
 			// Send the final one back. This way, we don't delay
 			// the reply while we wait on serial i/o.
@@ -282,16 +290,13 @@ void loop() {
 
 			// Now, resume listening so we catch the next packets.
 			radio.startListening();
-
-
-
+				  
 
 
 
 			// update hardware 
 
-
-
+					   
 		}
 
 		display << "s/f/r: " << successed << "/" << failed << "/" << ratio << endl;

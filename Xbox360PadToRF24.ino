@@ -3,7 +3,9 @@
 #include <SPI.h>
 #include <RF24.h>
 #include <XBOXRECV.h>
-
+#include <Wire.h>				//OLED:
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 #define PIN_CE 8
 #define PIN_CSN 7
@@ -67,11 +69,34 @@ RF24 radio(PIN_CE, PIN_CSN);
 USB Usb;
 XBOXRECV XboxRCV(&Usb);
 
+Adafruit_SSD1306 display(128, 64, &Wire, 4);
+unsigned long line = 0;
+template<class T>  Print& operator <<(Print& obj, T arg) {	//print stream, dont forget do display.display(); after!!
+	obj.print(arg);
+	return obj;
+} //Operator <<
+#define endl "\n"
+
+
+
+
 void setup() {
+	display.begin(SSD1306_SWITCHCAPVCC, 0x3C);	//OLED
+	display.clearDisplay();						//flush buffer (adafruit logo given from lib)
+	display.setTextSize(1);      // Normal 1:1 pixel scale
+	display.setTextColor(SSD1306_WHITE); // Draw white text
+	display.setCursor(0, 0);     // Start at top-left corner
+	display.cp437(true);         // Use full 256 char 'Code Page 437' font
+	println("setup() begin");
+
 	//Role setup
 	pinMode(PIN_ROLE, INPUT_PULLUP);
 	if (digitalRead(PIN_ROLE)) role = roleTransmitter;
 	else role = roleReceiver;
+	print("role: ");
+	if (role == roleTransmitter) println("transmitter");
+	else println("receiver");
+
 
 	//Serial Ÿle wp³ywa na pracê NRF24L01?
 	//Serial powoduje jitter PWM (serwa)
@@ -101,12 +126,13 @@ void setup() {
 	radio.enableAckPayload();
 	radio.setRetries(0, 15);                // Smallest time between retries, max no. of retries
 	radio.setAutoAck(true);
-
 	//radio.printDetails();                   // Dump the configuration of the rf unit to stdout (Serial?)
-
 	radio.powerUp();
 	radio.startListening();
 
+	pinMode(LED_BUILTIN, OUTPUT);
+	blink(LED_BUILTIN, 3, 500);
+	println("setup() end");
 }
 
 
@@ -214,15 +240,16 @@ void loop() {
 		// First, stop listening so we can talk.
 		radio.stopListening();
 		if (!radio.write(&controllerPackage, sizeof(controllerPackage))) {
-			// Serial.println(F("failed."));
+			println("radio.write error");
 		}
 		radio.startListening();
-		// Serial.println(F("delivery success."));
-		// printf("Time: %i ", millis() - loop_start);
+		//println("delivery success: ");
+		//print("t: ");
+		//print((millis() - loopStart));
+		
+		//FUJ
+		while (!radio.available() && (millis() - loopStart) < 10) {} //zawiesza wykonanie na 10s!!!
 
-		while (!radio.available() && (millis() - loopStart) < 10) {  //co 10s
-			// Serial.println(F("waiting."));
-		}
 		if (millis() - loopStart >= 200) {
 			// printf("Failed. Timeout: %i...", millis() - loop_start);
 			failed++;
@@ -263,12 +290,12 @@ void loop() {
 
 
 
-
-
-
-
-
 		}
+
+		print("s/f/r: ");
+		println(successed+"/"+failed+ratio);
+		
+
 	}
 
 }
@@ -276,6 +303,34 @@ void loop() {
 
 
 
+void blink(uint8_t pin, uint8_t n, unsigned int t) {
+	digitalWrite(pin, LOW);
+	for (uint8_t i = 0; i < 2*n; i++) {
+		digitalWrite(pin, !digitalRead(pin));
+		delay(t);
+	}
+}
+
+void print(String str) {
+	if (line != 0 && line % 8 == 0) {
+		display.clearDisplay();
+		display.setCursor(0, 0);
+	}
+	display.print(str);
+	display.display();
+	line++;
+	
+}
+
+void println(String str) {
+	if (line != 0 && line % 8 == 0) {
+		display.clearDisplay();
+		display.setCursor(0, 0);
+	}
+	display.println(str);
+	display.display();
+	line++;
+}
 
 
 

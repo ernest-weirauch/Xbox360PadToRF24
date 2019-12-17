@@ -40,12 +40,6 @@ typedef struct {
 }ControlPackage;
 ControlPackage controllerPackage;
 
-typedef struct {
-	int vibrationLevel;
-	char guideLevel;
-}FeedbackPackage;
-FeedbackPackage feedbackPackage;
-
 struct Xbox360PadState {
 	int leftJoyX, leftJoyY;
 	int rightJoyX, rightJoyY;
@@ -62,9 +56,15 @@ struct Xbox360PadState {
 	bool guide;
 } pad, lastPadState;
 
+typedef struct {
+	int vibrationLevel;
+	char guideLevel;
+}FeedbackPackage;
+FeedbackPackage feedbackPackage;
 
-// Radio pipe addresses for the 2 nodes to communicate.
-const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL };
+
+// Radio pipe = addresses on single channel for the 2 nodes to communicate.
+const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL }; //nie jest moï¿½liwe sï¿½uchanie wiï¿½cej niï¿½ jednej transmisji na pojedynczym pipie (dwa nadajniki mï¿½wiï¿½ce jednoczeï¿½nie na tym samym pipie nie mogï¿½ byï¿½ usï¿½yszane przez odbiornik).
 
 RF24 radio(PIN_CE, PIN_CSN);
 unsigned long loopStart = 0;
@@ -78,23 +78,29 @@ XBOXRECV XboxRCV(&Usb);
 
 Adafruit_SSD1306 display(128, 64, &Wire, 4);
 unsigned long line = 0;
+//template<class T>  Print& operator <<(Print& obj, T arg) {	//print stream, dont forget do display.display(); after every use!!
+//	obj.print(arg);
+//	return obj;
+//} //Operator <<
+//#define endl "\n"
+struct AfterReturn {  ~AfterReturn() {    display.display(); //refresh display  }};
 template<class T>  Print& operator <<(Print& obj, T arg) {	//print stream, dont forget do display.display(); after every use!!
 	obj.print(arg);
-	return obj;
+	AfterReturn displayRefresh;
+	return obj; //displayRefresh goin to be destroyed
 } //Operator <<
 #define endl "\n"
 
 BistableSwitch bistableSwitchLights;
 
-
 void setup() {
 	display.begin(SSD1306_SWITCHCAPVCC, 0x3C);	//OLED
 	display.clearDisplay();						//flush buffer (adafruit logo given from lib)
-	display.setTextSize(1);      // Normal 1:1 pixel scale - w tym trybie wyœwietla 8 wierszy po 21 znaków
+	display.setTextSize(1);      // Normal 1:1 pixel scale - w tym trybie wyï¿½wietla 8 wierszy po 21 znakï¿½w
 	display.setTextColor(SSD1306_WHITE); // Draw white text
 	display.setCursor(0, 0);     // Start at top-left corner
 	display.cp437(true);         // Use full 256 char 'Code Page 437' font
-	display << "setup() begin" << endl; disp();
+	display << "setup() begin" << endl; refreshDisplay();
 
 	//Role setup
 	pinMode(PIN_ROLE, INPUT_PULLUP);
@@ -102,10 +108,10 @@ void setup() {
 	else role = roleReceiver;
 
 	display << "role: ";
-	if (role == roleTransmitter) { display << "transmitter" << endl; disp(); }
-	else display << "receiver" << endl; disp();
+	if (role == roleTransmitter) { display << "transmitter" << endl; refreshDisplay(); }
+	else display << "receiver" << endl; refreshDisplay();
 
-	//Serial Ÿle wp³ywa na pracê NRF24L01?
+	//Serial ï¿½le wpï¿½ywa na pracï¿½ NRF24L01?
 	//Serial powoduje jitter PWM (serwa)
 
 	// Setup and configure RF radio
@@ -117,7 +123,7 @@ void setup() {
 
 		if (Usb.Init() == -1) {
 			digitalWrite(13, HIGH);
-			display << "Usb.Init error" << endl << "Halted!" << endl; disp();
+			display << "Usb.Init error" << endl << "Halted!" << endl; refreshDisplay();
 			while (1); //halt
 		}
 
@@ -129,7 +135,7 @@ void setup() {
 
 	radio.setDataRate(RF24_2MBPS); //RF24_250KBPS, RF24_1MBPS, RF24_2MBPS
 	radio.setPALevel(RF24_PA_MAX);
-	radio.setChannel(0x34);
+	radio.setChannel(0x34); //uï¿½yj example\scanner ï¿½eby przeskanowaï¿½ szum na kanaï¿½ach i wybraï¿½ najczystszy. (Dane z serial monitor wrzuï¿½ na wykres)
 	radio.enableDynamicPayloads();
 	radio.enableAckPayload();
 	radio.setRetries(0, 15);                // Smallest time between retries, max no. of retries
@@ -142,7 +148,7 @@ void setup() {
 
 	pinMode(LED_BUILTIN, OUTPUT);
 	blink(LED_BUILTIN, 3, 500);
-	display << "setup() end" << endl; disp();
+	display << "setup() end" << endl; refreshDisplay();
 }
 
 
@@ -247,10 +253,10 @@ void loop() {
 		// First, stop listening so we can talk.
 		radio.stopListening();
 		if (!radio.write(&controllerPackage, sizeof(controllerPackage))) {
-			display << "radio.write error" << endl; disp(); disp();
+			display << "radio.write error" << endl; refreshDisplay(); refreshDisplay();
 		}
 		radio.startListening();
-		display << "delivery success, t: " << millis() - loopStart << endl; disp();
+		display << "delivery success, t: " << millis() - loopStart << endl; refreshDisplay();
 
 
 		//FUJ
@@ -258,11 +264,11 @@ void loop() {
 
 		if (millis() - loopStart >= 200) {
 			failed++;
-			display << "failed, timeout: " << millis() - loopStart << endl; disp();
+			display << "failed, timeout: " << millis() - loopStart << endl; refreshDisplay();
 		} else {
 			//feedback receive
 			radio.read(&feedbackPackage, sizeof(feedbackPackage));
-			display << "got response" << endl; disp();
+			display << "got response" << endl; refreshDisplay();
 			successed++;
 		}
 
@@ -285,7 +291,7 @@ void loop() {
 			// the reply while we wait on serial i/o.
 			radio.stopListening();
 			radio.write(&feedbackPackage, sizeof(feedbackPackage));
-			display << "sent response" << endl; disp();
+			display << "sent response" << endl; refreshDisplay();
 
 
 			// Now, resume listening so we catch the next packets.
@@ -317,8 +323,8 @@ void blink(uint8_t pin, uint8_t n, unsigned int t) {
 	}
 }
 
-void disp() {
+void refreshDisplay() {
 	display.display();
 }
 
-
+//template <typename T> void disp(T out) {}

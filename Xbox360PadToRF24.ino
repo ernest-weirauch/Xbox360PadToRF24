@@ -83,7 +83,7 @@ unsigned long line = 0;
 //	return obj;
 //} //Operator <<
 //#define endl "\n"
-struct AfterReturn {  ~AfterReturn() {    display.display(); //refresh display  }};
+struct AfterReturn {  ~AfterReturn() {    display.display(); /*refresh display*/  }};
 template<class T>  Print& operator <<(Print& obj, T arg) {	//print stream, dont forget do display.display(); after every use!!
 	obj.print(arg);
 	AfterReturn displayRefresh;
@@ -100,7 +100,7 @@ void setup() {
 	display.setTextColor(SSD1306_WHITE); // Draw white text
 	display.setCursor(0, 0);     // Start at top-left corner
 	display.cp437(true);         // Use full 256 char 'Code Page 437' font
-	display << "setup() begin" << endl; refreshDisplay();
+	display << "setup() begin" << endl; //refreshDisplay();
 
 	//Role setup
 	pinMode(PIN_ROLE, INPUT_PULLUP);
@@ -108,8 +108,8 @@ void setup() {
 	else role = roleReceiver;
 
 	display << "role: ";
-	if (role == roleTransmitter) { display << "transmitter" << endl; refreshDisplay(); }
-	else display << "receiver" << endl; refreshDisplay();
+	if (role == roleTransmitter) { display << "transmitter" << endl; /*refreshDisplay();*/ }
+	else display << "receiver" << endl; //refreshDisplay();
 
 	//Serial �le wp�ywa na prac� NRF24L01?
 	//Serial powoduje jitter PWM (serwa)
@@ -123,7 +123,7 @@ void setup() {
 
 		if (Usb.Init() == -1) {
 			digitalWrite(13, HIGH);
-			display << "Usb.Init error" << endl << "Halted!" << endl; refreshDisplay();
+			display << "Usb.Init error" << endl << "Halted!" << endl; //refreshDisplay();
 			while (1); //halt
 		}
 
@@ -148,7 +148,7 @@ void setup() {
 
 	pinMode(LED_BUILTIN, OUTPUT);
 	blink(LED_BUILTIN, 3, 500);
-	display << "setup() end" << endl; refreshDisplay();
+	display << "setup() end" << endl; //refreshDisplay();
 }
 
 
@@ -253,10 +253,10 @@ void loop() {
 		// First, stop listening so we can talk.
 		radio.stopListening();
 		if (!radio.write(&controllerPackage, sizeof(controllerPackage))) {
-			display << "radio.write error" << endl; refreshDisplay(); refreshDisplay();
+			display << "radio.write error" << endl; // refreshDisplay();
 		}
 		radio.startListening();
-		display << "delivery success, t: " << millis() - loopStart << endl; refreshDisplay();
+		display << "delivery success, t: " << millis() - loopStart << endl; //efreshDisplay();
 
 
 		//FUJ
@@ -264,11 +264,11 @@ void loop() {
 
 		if (millis() - loopStart >= 200) {
 			failed++;
-			display << "failed, timeout: " << millis() - loopStart << endl; refreshDisplay();
+			display << "failed, timeout: " << millis() - loopStart << endl;//refreshDisplay();
 		} else {
 			//feedback receive
 			radio.read(&feedbackPackage, sizeof(feedbackPackage));
-			display << "got response" << endl; refreshDisplay();
+			display << "got response" << endl; //refreshDisplay();
 			successed++;
 		}
 
@@ -291,7 +291,7 @@ void loop() {
 			// the reply while we wait on serial i/o.
 			radio.stopListening();
 			radio.write(&feedbackPackage, sizeof(feedbackPackage));
-			display << "sent response" << endl; refreshDisplay();
+			display << "sent response" << endl;// refreshDisplay();
 
 
 			// Now, resume listening so we catch the next packets.
@@ -323,8 +323,8 @@ void blink(uint8_t pin, uint8_t n, unsigned int t) {
 	}
 }
 
-void refreshDisplay() {
-	display.display();
-}
+//void refreshDisplay() {
+//	display.display();
+//}
 
 //template <typename T> void disp(T out) {}

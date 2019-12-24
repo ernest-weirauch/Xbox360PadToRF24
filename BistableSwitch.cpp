@@ -30,6 +30,3 @@ void BistableSwitch::update(bool currentButtonState) { //load state of switch
 bool BistableSwitch::getState() {
   return switchState;
 }
-
-
-

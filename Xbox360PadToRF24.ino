@@ -1,9 +1,16 @@
-//Bi-directional, single-sketch
+//Bi-directional, single-sketch, no irq!
+/*todo:
+- tests
+- UDP emulation disable retransmission if bad
+- radio power n speed settings
+- payload ids to check lost packets implementation 
+*/
+
 
 #include <SPI.h>
 #include <RF24.h>
 #include <XBOXRECV.h>
-#include <Wire.h>				//OLED 128x64 display:
+#include <Wire.h>				//OLED 128x64 display I2C
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include "BistableSwitch.h"
@@ -24,7 +31,8 @@ typedef enum {
 Role role;
 
 typedef struct {
-	char leftJoyX, leftJoyY; //-127 - -1 | 0 | 1 - 128
+	uint16_t payloadId;
+	char leftJoyX, leftJoyY; //possible values: (-128 - -1 | 0 | 1 - 127)
 	char rightJoyX, rightJoyY;
 	uint8_t leftTrigger, rightTrigger;
 
@@ -37,8 +45,8 @@ typedef struct {
 
 	bool dPadUp, dPadRight, dPadDown, dPadLeft;
 	bool guide;
-}ControlPackage;
-ControlPackage controllerPackage;
+}ControlPayload;
+ControlPayload controllerPayload;
 
 struct Xbox360PadState {
 	int leftJoyX, leftJoyY;
@@ -57,10 +65,11 @@ struct Xbox360PadState {
 } pad, lastPadState;
 
 typedef struct {
-	int vibrationLevel;
-	char guideLevel;
-}FeedbackPackage;
-FeedbackPackage feedbackPackage;
+	uint16_t payloadId;
+	//int vibrationLevel;
+	//char guideLevel;
+}FeedbackPayload;
+FeedbackPayload feedbackAckPayload;
 
 
 // Radio pipe = addresses on single channel for the 2 nodes to communicate.
@@ -83,15 +92,27 @@ unsigned long line = 0;
 //	return obj;
 //} //Operator <<
 //#define endl "\n"
-struct AfterReturn {  ~AfterReturn() {    display.display(); /*refresh display*/  }};
+
+void newPage() {
+	display.clearDisplay();           //flush buffer (adafruit logo given from lib)
+	display.setCursor(0, 0);     // Start at top-left corner
+}
+struct AfterReturn {
+	~AfterReturn() {
+		display.display(); /*refresh display*/
+		if (line != 0 && line % 7 == 0) newPage();
+	}
+};
 template<class T>  Print& operator <<(Print& obj, T arg) {	//print stream, dont forget do display.display(); after every use!!
 	obj.print(arg);
 	AfterReturn displayRefresh;
-	return obj; //displayRefresh goin to be destroyed
+	return obj; //displayRefresh goin to be destroyed (and call display.display() refresh)
 } //Operator <<
 #define endl "\n"
 
 BistableSwitch bistableSwitchLights;
+
+
 
 void setup() {
 	display.begin(SSD1306_SWITCHCAPVCC, 0x3C);	//OLED
@@ -114,36 +135,8 @@ void setup() {
 	//Serial �le wp�ywa na prac� NRF24L01?
 	//Serial powoduje jitter PWM (serwa)
 
-	// Setup and configure RF radio
-	radio.begin(); // Calling begin() sets up a reasonable set of defaults settings
-
-	if (role == roleTransmitter) {
-		radio.openWritingPipe(pipes[0]);
-		radio.openReadingPipe(1, pipes[1]);
-
-		if (Usb.Init() == -1) {
-			digitalWrite(13, HIGH);
-			display << "Usb.Init error" << endl << "Halted!" << endl; //refreshDisplay();
-			while (1); //halt
-		}
-
-	} else {//roleReceiver
-		radio.openWritingPipe(pipes[1]);
-		radio.openReadingPipe(1, pipes[0]);
-	}
-
-
-	radio.setDataRate(RF24_2MBPS); //RF24_250KBPS, RF24_1MBPS, RF24_2MBPS
-	radio.setPALevel(RF24_PA_MAX);
-	radio.setChannel(0x34); //u�yj example\scanner �eby przeskanowa� szum na kana�ach i wybra� najczystszy. (Dane z serial monitor wrzu� na wykres)
-	radio.enableDynamicPayloads();
-	radio.enableAckPayload();
-	radio.setRetries(0, 15);                // Smallest time between retries, max no. of retries
-	radio.setAutoAck(true);
-	//radio.printDetails();                   // Dump the configuration of the rf unit to stdout (Serial?)
-	radio.powerUp();
-	radio.startListening();
-
+	configureRadio();
+	   
 
 
 	pinMode(LED_BUILTIN, OUTPUT);
@@ -153,6 +146,13 @@ void setup() {
 
 
 void loop() {
+	if (radio.failureDetected) {
+		radio.failureDetected = false;
+		display << "radio wiring failure!" << endl;
+		delay(250);
+		configureRadio(); //radio hot swap :D
+	}
+
 	//nadajnik
 	if (role = roleTransmitter) {
 		//USB
@@ -210,40 +210,40 @@ void loop() {
 		}
 
 		//convert pad readings to radio package - include deadzone fix
-		if (pad.leftJoyX != 0) controllerPackage.leftJoyX = map(pad.leftJoyX, JOY_MIN, JOY_MAX, -127, 128);
-		else controllerPackage.leftJoyX = 0;
+		if (pad.leftJoyX != 0) controllerPayload.leftJoyX = map(pad.leftJoyX, JOY_MIN, JOY_MAX, -127, 127);
+		else controllerPayload.leftJoyX = 0;
 
-		if (pad.leftJoyY != 0) controllerPackage.leftJoyY = map(pad.leftJoyY, JOY_MIN, JOY_MAX, -127, 128);
-		else controllerPackage.leftJoyY = 0;
+		if (pad.leftJoyY != 0) controllerPayload.leftJoyY = map(pad.leftJoyY, JOY_MIN, JOY_MAX, -127, 127);
+		else controllerPayload.leftJoyY = 0;
 
-		if (pad.rightJoyX != 0) controllerPackage.rightJoyX = map(pad.rightJoyX, JOY_MIN, JOY_MAX, -127, 128);
-		else controllerPackage.rightJoyX = 0;
+		if (pad.rightJoyX != 0) controllerPayload.rightJoyX = map(pad.rightJoyX, JOY_MIN, JOY_MAX, -127, 127);
+		else controllerPayload.rightJoyX = 0;
 
-		if (pad.rightJoyY != 0) controllerPackage.rightJoyY = map(pad.rightJoyY, JOY_MIN, JOY_MAX, -127, 128);
-		else controllerPackage.rightJoyY = 0;
+		if (pad.rightJoyY != 0) controllerPayload.rightJoyY = map(pad.rightJoyY, JOY_MIN, JOY_MAX, -127, 127);
+		else controllerPayload.rightJoyY = 0;
 
-		controllerPackage.leftTrigger = pad.leftTrigger;
-		controllerPackage.rightTrigger = pad.rightTrigger;
-		controllerPackage.A = pad.A;
-		controllerPackage.B = pad.B;
-		controllerPackage.X = pad.X;
+		controllerPayload.leftTrigger = pad.leftTrigger;
+		controllerPayload.rightTrigger = pad.rightTrigger;
+		controllerPayload.A = pad.A;
+		controllerPayload.B = pad.B;
+		controllerPayload.X = pad.X;
 		//controllerPackage.Y = pad.Y;
 		bistableSwitchLights.update(pad.Y);
-		controllerPackage.Y = bistableSwitchLights.getState(); //ciagle przesyla 1 jezeli swiatla wlaczone 
+		controllerPayload.Y = bistableSwitchLights.getState(); //ciagle przesyla 1 jezeli swiatla wlaczone 
 
-		controllerPackage.back = pad.back;
-		controllerPackage.start = pad.start;
+		controllerPayload.back = pad.back;
+		controllerPayload.start = pad.start;
 
-		controllerPackage.rightBumper = pad.rightBumper;
-		controllerPackage.leftBumper = pad.leftBumper;
-		controllerPackage.leftJoyButton = pad.leftJoyButton;
-		controllerPackage.rightJoyButton = pad.rightJoyButton;
+		controllerPayload.rightBumper = pad.rightBumper;
+		controllerPayload.leftBumper = pad.leftBumper;
+		controllerPayload.leftJoyButton = pad.leftJoyButton;
+		controllerPayload.rightJoyButton = pad.rightJoyButton;
 
-		controllerPackage.dPadLeft = pad.dPadLeft;
-		controllerPackage.dPadRight = pad.dPadRight;
-		controllerPackage.dPadUp = pad.dPadUp;
-		controllerPackage.dPadDown = pad.dPadDown;
-		controllerPackage.guide = pad.guide;
+		controllerPayload.dPadLeft = pad.dPadLeft;
+		controllerPayload.dPadRight = pad.dPadRight;
+		controllerPayload.dPadUp = pad.dPadUp;
+		controllerPayload.dPadDown = pad.dPadDown;
+		controllerPayload.guide = pad.guide;
 
 
 
@@ -252,7 +252,7 @@ void loop() {
 
 		// First, stop listening so we can talk.
 		radio.stopListening();
-		if (!radio.write(&controllerPackage, sizeof(controllerPackage))) {
+		if (!radio.write(&controllerPayload, sizeof(controllerPayload))) {
 			display << "radio.write error" << endl; // refreshDisplay();
 		}
 		radio.startListening();
@@ -265,9 +265,10 @@ void loop() {
 		if (millis() - loopStart >= 200) {
 			failed++;
 			display << "failed, timeout: " << millis() - loopStart << endl;//refreshDisplay();
-		} else {
+		}
+		else {
 			//feedback receive
-			radio.read(&feedbackPackage, sizeof(feedbackPackage));
+			radio.read(&feedbackAckPayload, sizeof(feedbackAckPayload));
 			display << "got response" << endl; //refreshDisplay();
 			successed++;
 		}
@@ -278,35 +279,34 @@ void loop() {
 
 
 
-	} else { //roleReceiver
+	}
+	else { //roleReceiver
 
-
-	   //  if there is data ready
+	//  if there is data ready
 		if (radio.available()) {
-			radio.read(&controllerPackage, sizeof(controllerPackage));
+			radio.read(&controllerPayload, sizeof(controllerPayload));
+			//radio.writeAckPayload(pipes[1], &feedbackAckPayload, sizeof(feedbackAckPayload));	//payload
+
+			// update hardware 
+
+
 
 			//!!! prepare feedback package !!!
 
 			// Send the final one back. This way, we don't delay
 			// the reply while we wait on serial i/o.
 			radio.stopListening();
-			radio.write(&feedbackPackage, sizeof(feedbackPackage));
+			radio.write(&feedbackAckPayload, sizeof(feedbackAckPayload));
 			display << "sent response" << endl;// refreshDisplay();
 
 
 			// Now, resume listening so we catch the next packets.
 			radio.startListening();
-				  
 
-
-
-			// update hardware 
-
-					   
 		}
 
 		display << "s/f/r: " << successed << "/" << failed << "/" << ratio << endl;
-		
+
 
 	}
 
@@ -328,3 +328,39 @@ void blink(uint8_t pin, uint8_t n, unsigned int t) {
 //}
 
 //template <typename T> void disp(T out) {}
+
+void configureRadio() {
+	// Setup and configure RF radio
+	radio.begin(); // Calling begin() sets up a reasonable set of defaults settings
+
+	if (role == roleTransmitter) {
+		radio.openWritingPipe(pipes[0]);
+		radio.openReadingPipe(1, pipes[1]);
+
+		if (Usb.Init() == -1) {
+			digitalWrite(13, HIGH);
+			display << "Usb.Init error" << endl << "Halted!" << endl; //refreshDisplay();
+			while (1); //halt
+		}
+
+	}
+	else {//roleReceiver
+		radio.openWritingPipe(pipes[1]);
+		radio.openReadingPipe(1, pipes[0]);
+	}
+
+
+	radio.setDataRate(RF24_2MBPS); //RF24_250KBPS, RF24_1MBPS, RF24_2MBPS
+	radio.setPALevel(RF24_PA_MAX);
+	radio.setChannel(0x34); //u�yj example\scanner �eby przeskanowa� szum na kana�ach i wybra� najczystszy. (Dane z serial monitor wrzu� na wykres)
+	radio.enableDynamicPayloads();		//ack payloads \/ are dynamic payloads
+	radio.enableAckPayload(); //allow optional ack payloads - fast response when recevied package (faster than changing tx to rx modes and vice versa)
+	radio.setRetries(0, 15);                // Smallest time between retries, max no. of retries
+	radio.setAutoAck(true);
+	//radio.printDetails();                   // Dump the configuration of the rf unit to stdout (Serial?)
+	radio.powerUp();
+	radio.startListening();
+
+	//radio.writeAckPayload(1, &counter, 1);          // Pre-load an ack-paylod into the FIFO buffer for pipe 1
+
+}
